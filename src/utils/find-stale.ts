@@ -1,25 +1,34 @@
+import { gray } from 'yoctocolors'
 import split from './split.js'
 import { stdout } from './stdout.js'
 
 export default class FindStale {
     remote: string
     force: boolean
-    remove: boolean
+    dryRun: boolean
+    pruneAll: boolean
     remoteBranches: Array<string>
     localBranches: Array<{ localBranch: string; remoteBranch: string }>
-    staleBranches: string[]
+    staleBranches: Array<string>
+    failedToDelete: Array<string>
     liveBranches: string[]
     noConnection: boolean
 
-    constructor(ops: { remote: string; force: boolean; remove: boolean }) {
+    constructor(ops: { remote: string; force: boolean; dryRun: boolean; pruneAll: boolean }) {
         this.remote = ops.remote
-        this.force = !!ops.force
-        this.remove = !!ops.remove
+        this.force = ops.force
+        this.dryRun = ops.dryRun
+        this.pruneAll = ops.pruneAll
         this.remoteBranches = []
         this.localBranches = []
         this.staleBranches = []
+        this.failedToDelete = []
         this.liveBranches = []
         this.noConnection = false
+    }
+
+    setForce(force: boolean) {
+        this.force = force
     }
 
     async preprocess() {
@@ -204,44 +213,37 @@ export default class FindStale {
             return
         }
 
-        if (!this.remove) {
+        if (this.dryRun) {
             console.log('Found remotely removed branches:')
         }
 
-        const broken: Array<string> = []
+        const failures: Array<string> = []
 
         for (const branchName of branchesToDelete) {
-            if (this.remove) {
-                console.info('')
-                console.info(`Removing "${branchName}"`)
-
+            if (!this.dryRun) {
                 try {
                     const dFlag = this.force ? '-D' : '-d'
-                    const out = await stdout(`git branch ${dFlag} "${branchName}"`)
+                    const command = `git branch ${dFlag} "${branchName}"`
+                    console.info(gray(command))
+                    const out = await stdout(command)
                     console.info(out)
                 } catch (err) {
-                    console.error(`ERROR: Unable to remove branch "${branchName}": `, err)
-                    broken.push(branchName)
+                    failures.push(branchName)
                 }
             } else {
                 console.info(`  - ${branchName}`)
             }
         }
 
-        console.info('')
+        console.info()
 
-        if (broken.length > 0) {
-            // unable to remove branch
-            console.info('Not all branches were removed:')
-            broken.forEach((name) => {
-                console.info('  - ' + name)
-            })
-            console.info('')
-            console.info('INFO: To force removal use --force flag')
-        } else if (this.remove) {
-            console.info('INFO: Branches were removed')
-        } else {
-            console.info('INFO: To remove branches, don’t include the --dry-run flag')
+        if (failures.length === 0 && !this.dryRun) {
+            console.info('ℹ️ Branches were removed')
+        } else if (failures.length === 0) {
+            console.info('ℹ️ To remove branches, don’t include the --dry-run flag')
         }
+
+        // Add new failures to the list
+        this.failedToDelete = this.failedToDelete.concat(failures.filter((name) => !this.failedToDelete.includes(name)))
     }
 }

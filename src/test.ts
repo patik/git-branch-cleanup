@@ -5,21 +5,16 @@ import os from 'node:os'
 import path from 'node:path'
 import { argv } from 'node:process'
 import { fileURLToPath } from 'node:url'
+import { green } from 'yoctocolors'
 
 const onlyPrepare = argv.find((one) => one === '--prepare')
-
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
-
 const bin = path.join(__dirname, '../dist/index.js')
-
 const isCI = process.argv[2]?.split('=')[1] === 'true'
 
-console.log(`isCI: ${isCI}`)
-
 let tempdir: string = process.argv[3]?.split('=')[1] || ''
-let bareDir: string
-let workingDir: string
+let workingDir: string = ''
 
 const setup = () => {
     if (isCI) {
@@ -32,7 +27,7 @@ const setup = () => {
         tempdir = mkdtempSync(tmp + path.sep + 'git-prune-branches-')
     }
 
-    bareDir = tempdir + path.sep + 'bare'
+    const bareDir = tempdir + path.sep + 'bare'
     workingDir = tempdir + path.sep + 'working'
 
     const file = `${workingDir}${path.sep}lolipop`
@@ -119,7 +114,6 @@ ${output}
 
     assert.notEqual(output.indexOf('Deleted branch #333-work'), -1)
     assert.notEqual(output.indexOf('Deleted branch feature/fast-forwarded'), -1)
-    assert.notEqual(output.indexOf('Not all branches were removed:'), -1)
     assert.notEqual(output.indexOf(' no-ff'), -1)
 }
 
@@ -139,10 +133,13 @@ ${output}
 setup()
 
 if (onlyPrepare) {
-    console.log('All prepared')
+    console.log(`All prepared
+
+${workingDir}
+`)
 } else {
     test_nothing()
     testing_prune()
     testing_force()
-    console.log('We are good to go!')
+    console.log(green('All tests passed!'))
 }
